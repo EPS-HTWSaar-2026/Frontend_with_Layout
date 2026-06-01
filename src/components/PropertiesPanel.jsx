@@ -1,290 +1,87 @@
-function toNumber(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? fallback : parsed;
-}
+// src/components/PropertiesPanel.jsx
 
-export default function PropertiesPanel({
-  mapMeta,
-  selectedAnchor,
-  selectedWall,
-  environmentProfiles,
-  onMapMetaChange,
-  onAnchorChange,
-  onWallChange,
-}) {
+export default function PropertiesPanel({ selectedEntity, state, dispatch }) {
+  // 如果没有选中任何东西，直接返回提示
+  if (!selectedEntity) {
+    return (
+      <div className="properties-panel">
+        <p className="placeholder">请选择地图上的实体查看属性</p>
+      </div>
+    );
+  }
+
+  const { type, id } = selectedEntity;
+
+  // 安全地获取实体数据
+  const data = type === "anchor"
+    ? state.anchors.byId[id]
+    : state.walls.byId[id];
+
+  // 如果数据不存在（比如刚被删除），显示错误提示
+  if (!data) {
+    return (
+      <div className="properties-panel">
+        <p className="error">未找到该实体的数据 (ID: {id})</p>
+      </div>
+    );
+  }
+
+  // 处理删除逻辑
+  const handleDelete = () => {
+    // 增加一个简单的确认，防止误删
+    if (window.confirm(`确定要删除这个${type === "anchor" ? "基站" : "墙体"}吗？`)) {
+      dispatch({
+        type: "DELETE_ENTITY",
+        payload: { type, id }
+      });
+    }
+  };
+
   return (
     <div className="properties-panel">
-      <section className="properties-section">
-        <h2>Map Settings</h2>
+      <h3>{type === "anchor" ? "基站属性" : "墙体属性"}</h3>
+      <hr />
 
-        <label>
-          Map name
-          <input
-            value={mapMeta.name}
-            onChange={(e) => onMapMetaChange({ name: e.target.value })}
-          />
-        </label>
+      <div className="prop-group">
+        <label>名称:</label>
+        <input
+          value={data.name || ""}
+          onChange={(e) => dispatch({
+            type: type === "anchor" ? "UPDATE_ANCHOR" : "UPDATE_WALL",
+            payload: { id, changes: { name: e.target.value } }
+          })}
+        />
+      </div>
 
-        <label>
-          Width (m)
-          <input
-            type="number"
-            step="0.1"
-            value={mapMeta.width}
-            onChange={(e) =>
-              onMapMetaChange({ width: toNumber(e.target.value, mapMeta.width) })
-            }
-          />
-        </label>
+      <div className="prop-group">
+        <label>ID:</label>
+        <span>{id}</span>
+      </div>
 
-        <label>
-          Height (m)
-          <input
-            type="number"
-            step="0.1"
-            value={mapMeta.height}
-            onChange={(e) =>
-              onMapMetaChange({ height: toNumber(e.target.value, mapMeta.height) })
-            }
-          />
-        </label>
+      {/* 坐标显示（可选，方便调试） */}
+      <div className="prop-group">
+        <label>坐标:</label>
+        <span>X: {data.x?.toFixed(2)}, Y: {data.y?.toFixed(2)}</span>
+      </div>
 
-        <label>
-          Grid size (m)
-          <input
-            type="number"
-            step="0.1"
-            value={mapMeta.gridSize}
-            onChange={(e) =>
-              onMapMetaChange({
-                gridSize: toNumber(e.target.value, mapMeta.gridSize),
-              })
-            }
-          />
-        </label>
-
-        <label>
-          Scale (px/m)
-          <input
-            type="number"
-            step="1"
-            value={mapMeta.scale}
-            onChange={(e) =>
-              onMapMetaChange({ scale: toNumber(e.target.value, mapMeta.scale) })
-            }
-          />
-        </label>
-      </section>
-
-      {selectedAnchor ? (
-        <section className="properties-section">
-          <h2>Selected ESP</h2>
-
-          <label>
-            Name
-            <input
-              value={selectedAnchor.name}
-              onChange={(e) => onAnchorChange({ name: e.target.value })}
-            />
-          </label>
-
-          <label>
-            Anchor ID
-            <input
-              value={selectedAnchor.anchorId}
-              onChange={(e) => onAnchorChange({ anchorId: e.target.value })}
-            />
-          </label>
-
-          <label>
-            X
-            <input
-              type="number"
-              step="0.1"
-              value={selectedAnchor.x}
-              onChange={(e) => onAnchorChange({ x: toNumber(e.target.value, selectedAnchor.x) })}
-            />
-          </label>
-
-          <label>
-            Y
-            <input
-              type="number"
-              step="0.1"
-              value={selectedAnchor.y}
-              onChange={(e) => onAnchorChange({ y: toNumber(e.target.value, selectedAnchor.y) })}
-            />
-          </label>
-
-          <label>
-            Z
-            <input
-              type="number"
-              step="0.1"
-              value={selectedAnchor.z}
-              onChange={(e) => onAnchorChange({ z: toNumber(e.target.value, selectedAnchor.z) })}
-            />
-          </label>
-
-          <label>
-            Environment profile
-            <select
-              value={selectedAnchor.environmentProfile}
-              onChange={(e) => {
-                const profileId = e.target.value;
-                const profile = environmentProfiles.byId[profileId];
-                onAnchorChange({
-                  environmentProfile: profileId,
-                  nValue: profile.nValue,
-                  rssiBase: profile.rssiBaseDefault,
-                });
-              }}
-            >
-              {environmentProfiles.allIds.map((profileId) => (
-                <option key={profileId} value={profileId}>
-                  {environmentProfiles.byId[profileId].name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            N-value
-            <input
-              type="number"
-              step="0.1"
-              value={selectedAnchor.nValue}
-              onChange={(e) =>
-                onAnchorChange({
-                  nValue: toNumber(e.target.value, selectedAnchor.nValue),
-                })
-              }
-            />
-          </label>
-
-          <label>
-            RSSI base
-            <input
-              type="number"
-              step="1"
-              value={selectedAnchor.rssiBase}
-              onChange={(e) =>
-                onAnchorChange({
-                  rssiBase: toNumber(e.target.value, selectedAnchor.rssiBase),
-                })
-              }
-            />
-          </label>
-
-          <label>
-            Color
-            <input
-              type="color"
-              value={selectedAnchor.color}
-              onChange={(e) => onAnchorChange({ color: e.target.value })}
-            />
-          </label>
-
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={selectedAnchor.isActive}
-              onChange={(e) => onAnchorChange({ isActive: e.target.checked })}
-            />
-            Active
-          </label>
-
-          <label>
-            Notes
-            <textarea
-              rows="3"
-              value={selectedAnchor.notes}
-              onChange={(e) => onAnchorChange({ notes: e.target.value })}
-            />
-          </label>
-        </section>
-      ) : null}
-
-      {selectedWall ? (
-        <section className="properties-section">
-          <h2>Selected Wall</h2>
-
-          <label>
-            X1
-            <input
-              type="number"
-              step="0.1"
-              value={selectedWall.x1}
-              onChange={(e) => onWallChange({ x1: toNumber(e.target.value, selectedWall.x1) })}
-            />
-          </label>
-
-          <label>
-            Y1
-            <input
-              type="number"
-              step="0.1"
-              value={selectedWall.y1}
-              onChange={(e) => onWallChange({ y1: toNumber(e.target.value, selectedWall.y1) })}
-            />
-          </label>
-
-          <label>
-            X2
-            <input
-              type="number"
-              step="0.1"
-              value={selectedWall.x2}
-              onChange={(e) => onWallChange({ x2: toNumber(e.target.value, selectedWall.x2) })}
-            />
-          </label>
-
-          <label>
-            Y2
-            <input
-              type="number"
-              step="0.1"
-              value={selectedWall.y2}
-              onChange={(e) => onWallChange({ y2: toNumber(e.target.value, selectedWall.y2) })}
-            />
-          </label>
-
-          <label>
-            Thickness
-            <input
-              type="number"
-              step="0.01"
-              value={selectedWall.thickness}
-              onChange={(e) =>
-                onWallChange({ thickness: toNumber(e.target.value, selectedWall.thickness) })
-              }
-            />
-          </label>
-
-          <label>
-            Material
-            <input
-              value={selectedWall.material}
-              onChange={(e) => onWallChange({ material: e.target.value })}
-            />
-          </label>
-
-          <label>
-            Label
-            <input
-              value={selectedWall.label}
-              onChange={(e) => onWallChange({ label: e.target.value })}
-            />
-          </label>
-        </section>
-      ) : null}
-
-      {!selectedAnchor && !selectedWall ? (
-        <section className="properties-section">
-          <h2>Selection</h2>
-          <p>Select a wall or an ESP to edit its properties.</p>
-        </section>
-      ) : null}
+      {/* 🔥 新增删除区域 */}
+      <div className="delete-section" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
+        <button
+          className="delete-btn"
+          onClick={handleDelete}
+          style={{
+            width: '100%',
+            padding: '8px',
+            backgroundColor: '#ff4d4f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          删除选中项
+        </button>
+      </div>
     </div>
   );
 }

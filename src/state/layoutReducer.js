@@ -75,7 +75,7 @@ export function layoutReducer(state, action) {
           ...state.ui,
           pan: action.payload,
         },
-      };    
+      };
 
     case "UPDATE_MAP_META":
       return {
@@ -96,7 +96,7 @@ export function layoutReducer(state, action) {
         y2: action.payload.y2,
         thickness: 0.15,
         material: "concrete",
-        label: "",
+        name: `墙体 ${state.walls.allIds.length + 1}`, // 增加默认名称
       };
 
       return {
@@ -141,6 +141,7 @@ export function layoutReducer(state, action) {
       const defaultProfile = state.environmentProfiles.byId[defaultProfileId];
 
       const anchor = {
+        id: id, // 确保这里用 id 方便统一处理
         anchorId: id,
         name: `ESP ${state.anchors.allIds.length + 1}`,
         x: action.payload.x,
@@ -189,43 +190,47 @@ export function layoutReducer(state, action) {
       };
     }
 
+    // 🔥 统一的删除逻辑：处理 PropertiesPanel 的按钮点击
+    case "DELETE_ENTITY": {
+      const { type, id } = action.payload;
+      const targetKey = type === "anchor" ? "anchors" : "walls";
+
+      const newById = { ...state[targetKey].byId };
+      delete newById[id];
+
+      return {
+        ...state,
+        [targetKey]: {
+          byId: newById,
+          allIds: state[targetKey].allIds.filter((entityId) => entityId !== id),
+        },
+        ui: {
+          ...state.ui,
+          selectedEntity: null, // 删除后清空选中状态
+        },
+      };
+    }
+
+    // 保留此项，用于以后可能的键盘快捷键删除
     case "DELETE_SELECTED": {
       const selected = state.ui.selectedEntity;
       if (!selected) return state;
 
-      if (selected.type === "anchor") {
-        return {
-          ...state,
-          anchors: {
-            byId: Object.fromEntries(
-              Object.entries(state.anchors.byId).filter(([id]) => id !== selected.id)
-            ),
-            allIds: removeId(state.anchors.allIds, selected.id),
-          },
-          ui: {
-            ...state.ui,
-            selectedEntity: null,
-          },
-        };
-      }
+      const targetKey = selected.type === "anchor" ? "anchors" : "walls";
+      const newById = { ...state[targetKey].byId };
+      delete newById[selected.id];
 
-      if (selected.type === "wall") {
-        return {
-          ...state,
-          walls: {
-            byId: Object.fromEntries(
-              Object.entries(state.walls.byId).filter(([id]) => id !== selected.id)
-            ),
-            allIds: removeId(state.walls.allIds, selected.id),
-          },
-          ui: {
-            ...state.ui,
-            selectedEntity: null,
-          },
-        };
-      }
-
-      return state;
+      return {
+        ...state,
+        [targetKey]: {
+          byId: newById,
+          allIds: state[targetKey].allIds.filter((id) => id !== selected.id),
+        },
+        ui: {
+          ...state.ui,
+          selectedEntity: null,
+        },
+      };
     }
 
     case "RESET_LAYOUT":

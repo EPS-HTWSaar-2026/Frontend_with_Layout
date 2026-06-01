@@ -1,7 +1,5 @@
 function makeId(prefix = "id") {
-  const randomPart =
-    globalThis.crypto?.randomUUID?.() ||
-    Math.random().toString(36).slice(2, 10);
+  const randomPart = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10);
   return `${prefix}_${randomPart}`;
 }
 
@@ -15,9 +13,8 @@ export function createDefaultState() {
       height: 10,
       unit: "m",
       gridSize: 0.5,
-      scale: 50, // pixels per meter
+      scale: 50,
     },
-
     environmentProfiles: {
       byId: {
         tunnel_standard: {
@@ -25,32 +22,15 @@ export function createDefaultState() {
           name: "Tunnel Standard",
           nValue: 2.3,
           rssiBaseDefault: -48,
-          description: "Standard tunnel conditions",
-        },
-        tunnel_dense: {
-          profileId: "tunnel_dense",
-          name: "Tunnel Dense",
-          nValue: 2.8,
-          rssiBaseDefault: -52,
-          description: "Denser environment with stronger attenuation",
         },
       },
-      allIds: ["tunnel_standard", "tunnel_dense"],
+      allIds: ["tunnel_standard"],
     },
-
-    walls: {
-      byId: {},
-      allIds: [],
-    },
-
-    anchors: {
-      byId: {},
-      allIds: [],
-    },
-
+    walls: { byId: {}, allIds: [] },
+    anchors: { byId: {}, allIds: [] },
     ui: {
-      activeTool: "select", // select | wall | anchor | pan
-      selectedEntity: null, // { type: "anchor" | "wall", id: string }
+      activeTool: "select",
+      selectedEntity: null,
       showGrid: true,
       snapToGrid: true,
       pendingWallStart: null,
