@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState, useReducer } from "react";
 
-// 状态管理
 import { createDefaultState } from "./state/initialState";
 import { layoutReducer } from "./state/layoutReducer";
 
-// 组件
 import TopBar from "./components/TopBar";
 import Toolbar from "./components/Toolbar";
 import MapCanvas from "./components/MapCanvas";
@@ -13,10 +11,8 @@ import StatusBar from "./components/StatusBar";
 import Header from "./components/Header";
 import StatusCard from "./components/StatusCard";
 import TagTable from "./components/TagTable";
-import EventLog from "./components/EventLog";
 
-// 逻辑支持
-import { getStatus, getTags, getEvents } from "./services/api";
+import { getStatus, getTags, getPackets } from "./services/api";
 import useWebSocket from "./hooks/useWebSocket";
 import "./App.css";
 
@@ -27,14 +23,18 @@ export default function App() {
     layoutReducer,
     undefined,
     () => {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : createDefaultState();
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        return saved ? JSON.parse(saved) : createDefaultState();
+      } catch {
+        return createDefaultState();
+      }
     }
   );
 
   const [status, setStatus] = useState(null);
   const [tags, setTags] = useState([]);
-  const [events, setEvents] = useState([]);
+  const [recentPackets, setRecentPackets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -45,15 +45,15 @@ export default function App() {
   async function loadAll() {
     try {
       setLoading(true);
-      const [s, t, e] = await Promise.all([
+      setError("");
+      const [s, t, p] = await Promise.all([
         getStatus(),
         getTags(),
-        getEvents(50),
+        getPackets({ limit: 50 }),
       ]);
-
       setStatus(s);
       setTags(t);
-      setEvents(e);
+      setRecentPackets(p);
       setLastRefresh(new Date().toLocaleTimeString());
     } catch (err) {
       setError(err.message);
@@ -66,64 +66,34 @@ export default function App() {
     loadAll();
   }, []);
 
-  // 4. WebSocket 实时数据处理
+  // Subscribe to the "locations" channel — receives trilaterated {tag_mac, x, y, rmse, ...}
   const { connected } = useWebSocket(
     "ws://192.168.100.75:8765",
+    "locations",
     (data) => {
-      if (!data) return;
+      if (!data?.tag_mac) return;
 
-      // --- 关键修改点：兼容你的 Python 数据格式 ---
-      let incomingTags = [];
-
-      // 情况 A: 数据是直接的 Tag 对象 (含有 tag_mac)
-      if (data.tag_mac) {
-        incomingTags = [data];
-      }
-      // 情况 B: 数据是包装过的 { type: "tags", payload: [...] }
-      else if (data.type === "tags") {
-        incomingTags = Array.isArray(data.payload) ? data.payload : [data.payload];
-      }
-      // 情况 C: 更新状态或事件
-      else {
-        if (data.type === "status") setStatus(data.payload);
-        if (data.type === "events") setEvents(data.payload || []);
-        return;
-      }
-
-      // 执行增量更新逻辑
       setTags((prev) => {
-        const tagMap = new Map(prev.map(t => [t.id, t]));
-
-        incomingTags.forEach(raw => {
-          // 统一映射 tag_mac -> id
-          const id = raw.tag_mac || raw.id;
-          if (!id) return;
-
-          const existing = tagMap.get(id) || {};
-
-          tagMap.set(id, {
-            ...existing,
-            ...raw,
-            id: id, // 强制确保有 id 字段供前端 key 使用
-            x: raw.x,
-            y: raw.y,
-            lastSeen: Date.now()
-          });
+        const map = new Map(prev.map((t) => [t.tag_mac, t]));
+        const existing = map.get(data.tag_mac) || {};
+        map.set(data.tag_mac, {
+          ...existing,
+          ...data,
+          id: data.tag_mac,
+          lastSeen: Date.now(),
         });
-
-        return Array.from(tagMap.values());
+        return Array.from(map.values());
       });
     }
   );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // quota exceeded — silently ignore
+    }
   }, [state]);
-
-  const latestEvent = useMemo(() => {
-    if (!events.length) return "—";
-    return `${events[0].type || events[0].message || "Event"}`;
-  }, [events]);
 
   if (!state || !state.ui) return <div>Loading state...</div>;
 
@@ -147,13 +117,23 @@ export default function App() {
           <MapCanvas
             state={state}
             tags={tags}
-            onMouseWorldChange={(w) => dispatch({ type: "SET_MOUSE_WORLD", payload: w })}
+            onMouseWorldChange={(w) =>
+              dispatch({ type: "SET_MOUSE_WORLD", payload: w })
+            }
             onPanChange={(p) => dispatch({ type: "SET_PAN", payload: p })}
-            onSelectEntity={(e) => dispatch({ type: "SET_SELECTED_ENTITY", payload: e })}
-            onAddAnchor={(pos) => dispatch({ type: "ADD_ANCHOR", payload: pos })}
-            onMoveAnchor={(id, pos) => dispatch({ type: "UPDATE_ANCHOR", payload: { id, changes: pos } })}
+            onSelectEntity={(e) =>
+              dispatch({ type: "SET_SELECTED_ENTITY", payload: e })
+            }
+            onAddAnchor={(pos) =>
+              dispatch({ type: "ADD_ANCHOR", payload: pos })
+            }
+            onMoveAnchor={(id, pos) =>
+              dispatch({ type: "UPDATE_ANCHOR", payload: { id, changes: pos } })
+            }
             onAddWall={(wall) => dispatch({ type: "ADD_WALL", payload: wall })}
-            onSetPendingWallStart={(pos) => dispatch({ type: "SET_PENDING_WALL_START", payload: pos })}
+            onSetPendingWallStart={(pos) =>
+              dispatch({ type: "SET_PENDING_WALL_START", payload: pos })
+            }
           />
         </div>
 
@@ -170,12 +150,24 @@ export default function App() {
         ) : (
           <>
             <div className="status-grid">
-              <StatusCard title="WS Status" value={connected ? "Online" : "Offline"} color={connected ? "#52c41a" : "#ff4d4f"} />
-              <StatusCard title="Total Tags" value={tags.length} />
-              <StatusCard title="Last Event" value={latestEvent} />
+              <StatusCard
+                title="Backend"
+                value={status?.message ? "Online" : "Offline"}
+                tone={status?.message ? "good" : "bad"}
+              />
+              <StatusCard
+                title="WS Feed"
+                value={connected ? "Live" : "Offline"}
+                tone={connected ? "good" : "bad"}
+              />
+              <StatusCard title="Tags Tracked" value={tags.length} />
+              <StatusCard
+                title="Last Refresh"
+                value={lastRefresh || "—"}
+              />
             </div>
+
             <TagTable tags={tags} search={search} />
-            <EventLog events={events} />
           </>
         )}
       </div>

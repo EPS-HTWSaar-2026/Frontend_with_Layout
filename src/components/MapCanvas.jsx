@@ -150,8 +150,8 @@ export default function MapCanvas({
           {/* 实时 Tags (显示当前归零后的坐标) */}
           {tags.map((tag) => {
             // 归零逻辑计算
-            const calX = (tag.x - OFFSET_X) * UNIT_CONVERSION;
-            const calY = (OFFSET_Y - tag.y) * UNIT_CONVERSION;
+            const calX = tag.x ?? 0;
+            const calY = tag.y ?? 0;
 
             const isOut = calX < 0 || calX > MAP_W || calY < 0 || calY > MAP_H;
             const safeX = clamp(calX, 0, MAP_W);
