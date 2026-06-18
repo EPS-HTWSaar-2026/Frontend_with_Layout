@@ -4,28 +4,44 @@ function formatDate(value) {
   if (!value) return "—";
   try {
     return new Date(value).toLocaleString();
-  } catch (e) {
+  } catch {
     return "Invalid Date";
   }
 }
 
-function statusClass(status) {
-  const s = status?.toLowerCase();
-  if (s === "online" || s === "active") return "badge-online";
-  if (s === "stale" || s === "warning") return "badge-stale";
+function formatNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : "—";
+}
+
+function hasPosition(tag) {
+  return Number.isFinite(Number(tag?.x)) && Number.isFinite(Number(tag?.y));
+}
+
+function statusClass(status, tag) {
+  const s = String(status ?? "").toLowerCase();
+
+  if (s === "online" || s === "active" || hasPosition(tag)) {
+    return "badge-online";
+  }
+  if (s === "stale" || s === "warning") {
+    return "badge-stale";
+  }
   return "badge-offline";
 }
 
-export default function TagTable({ tags, search }) {
-  // 1. 过滤逻辑增加防御性判断
+
+export default function TagTable({ tags = [], search = "" }) {
+
+  console.log("TAGS:", tags);
+
   const filteredTags = tags.filter((tag) => {
-    const q = search?.trim().toLowerCase();
+    const q = String(search).trim().toLowerCase();
     if (!q) return true;
 
-    // 适配多种可能的 ID 字段名
-    const id = (tag.tag_id || tag.tag_mac || tag.id || "").toLowerCase();
-    const event = (tag.last_event || "").toLowerCase();
-    const source = (tag.source || "").toLowerCase();
+    const id = String(tag?.tag_id ?? tag?.id ?? "").toLowerCase();
+    const event = String(tag?.last_event ?? "").toLowerCase();
+    const source = String(tag?.source ?? "").toLowerCase();
 
     return id.includes(q) || event.includes(q) || source.includes(q);
   });
@@ -39,50 +55,62 @@ export default function TagTable({ tags, search }) {
 
       <div className="table-wrapper">
         <table>
+
           <thead>
             <tr>
               <th>Tag ID</th>
-              <th>RSSI</th>
-              <th>Status</th>
-              <th>Last Event</th>
-              <th>Channel</th>
-              <th>Source</th>
+              <th>Position</th>
               <th>Last Seen</th>
             </tr>
           </thead>
+
           <tbody>
             {filteredTags.length === 0 ? (
               <tr>
-                {/* 修正 colSpan 为 7 (与表头数量一致) */}
-                <td colSpan="7" className="empty-state">
+                <td colSpan="8" className="empty-state">
                   No tags found
                 </td>
               </tr>
             ) : (
-              filteredTags.map((tag) => {
-                // 2. 生成唯一的 Key 和 显示用的 ID
-                const displayId = tag.tag_id || tag.tag_mac || tag.id || "Unknown";
-                const rowKey = tag.tag_mac || tag.tag_id || tag.id || Math.random();
+              filteredTags.map((tag, index) => {
+
+                const displayId =
+                  tag?.tag_id ?? tag?.id ?? "—";
+
+                const rowKey =
+                  tag?.tag_id ?? tag?.id ?? index;
+
+                const displayStatus =
+                  tag?.status ?? (hasPosition(tag) ? "online" : "offline");
 
                 return (
                   <tr key={rowKey}>
+
+                    {/* ID */}
                     <td className="mono">{displayId}</td>
-                    {/* 3. 增加默认值判断 */}
-                    <td>{tag.rssi ?? "—"}</td>
+
+                    {/* POSITION */}
                     <td>
-                      <span className={`badge ${statusClass(tag.status || "offline")}`}>
-                        {tag.status || "offline"}
-                      </span>
+                      {hasPosition(tag)
+                        ? `X: ${formatNumber(tag.x)} | Y: ${formatNumber(tag.y)}`
+                        : "—"}
                     </td>
-                    <td>{tag.last_event || "N/A"}</td>
-                    <td>{tag.channel || "—"}</td>
-                    <td>{tag.source || "System"}</td>
-                    <td>{formatDate(tag.last_seen || tag.timestamp)}</td>
+
+                    {/* LAST SEEN */}
+                    <td>
+                      {formatDate(
+                        tag?.last_seen ??
+                        tag?.lastSeen ??
+                        tag?.timestamp
+                      )}
+                    </td>
+
                   </tr>
                 );
               })
             )}
           </tbody>
+
         </table>
       </div>
     </section>

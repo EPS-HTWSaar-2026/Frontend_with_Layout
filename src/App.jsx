@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, useReducer } from "react";
-
 import { createDefaultState } from "./state/initialState";
 import { layoutReducer } from "./state/layoutReducer";
-
 import TopBar from "./components/TopBar";
 import Toolbar from "./components/Toolbar";
 import MapCanvas from "./components/MapCanvas";
@@ -11,10 +9,10 @@ import StatusBar from "./components/StatusBar";
 import Header from "./components/Header";
 import StatusCard from "./components/StatusCard";
 import TagTable from "./components/TagTable";
-
 import { getStatus, getTags, getPackets } from "./services/api";
 import useWebSocket from "./hooks/useWebSocket";
 import "./App.css";
+import "./index.css";
 
 const STORAGE_KEY = "rtls_layout_data";
 

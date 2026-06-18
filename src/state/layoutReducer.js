@@ -96,7 +96,7 @@ export function layoutReducer(state, action) {
         y2: action.payload.y2,
         thickness: 0.15,
         material: "concrete",
-        name: `墙体 ${state.walls.allIds.length + 1}`, // 增加默认名称
+        name: `Wall ${state.walls.allIds.length + 1}`, 
       };
 
       return {
@@ -136,12 +136,18 @@ export function layoutReducer(state, action) {
     }
 
     case "ADD_ANCHOR": {
-      const id = makeId("anchor");
+
+      if (state.anchors.allIds.length >= 3) {
+      return state;
+      }
+
+  const id = makeId("anchor");
+
       const defaultProfileId = state.environmentProfiles.allIds[0];
       const defaultProfile = state.environmentProfiles.byId[defaultProfileId];
 
       const anchor = {
-        id: id, // 确保这里用 id 方便统一处理
+        id: id, // 
         anchorId: id,
         name: `ESP ${state.anchors.allIds.length + 1}`,
         x: action.payload.x,
@@ -190,7 +196,7 @@ export function layoutReducer(state, action) {
       };
     }
 
-    // 🔥 统一的删除逻辑：处理 PropertiesPanel 的按钮点击
+  
     case "DELETE_ENTITY": {
       const { type, id } = action.payload;
       const targetKey = type === "anchor" ? "anchors" : "walls";
@@ -206,12 +212,12 @@ export function layoutReducer(state, action) {
         },
         ui: {
           ...state.ui,
-          selectedEntity: null, // 删除后清空选中状态
+          selectedEntity: null, 
         },
       };
     }
 
-    // 保留此项，用于以后可能的键盘快捷键删除
+
     case "DELETE_SELECTED": {
       const selected = state.ui.selectedEntity;
       if (!selected) return state;
