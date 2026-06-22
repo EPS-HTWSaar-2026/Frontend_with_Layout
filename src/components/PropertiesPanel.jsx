@@ -11,7 +11,6 @@ export default function PropertiesPanel({ selectedEntity, state, dispatch }) {
 
   const { type, id } = selectedEntity;
 
-
   const data = type === "anchor"
     ? state.anchors.byId[id]
     : state.walls.byId[id];
