@@ -1,104 +1,142 @@
 import { Stage, Layer, Line, Circle, Text, Group, Rect } from "react-konva";
-import { useRef, useState, useEffect } from "react";
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
+import { useEffect, useRef, useState } from "react";
 
 export default function MapCanvas({
   state,
   tags = [],
   onMouseWorldChange,
   onAddWall,
-  onUpdateWall,
   onSetPendingWallStart,
   onAddAnchor,
+  onMoveAnchor,
   onUpdateAnchor,
+  onPanChange,
   onSelectEntity,
 }) {
   const { walls, anchors, ui, mapMeta } = state;
+
   const stageRef = useRef(null);
+  const containerRef = useRef(null);
 
   const SNAP_STEP = 0.5;
-  const currentScale = ui.pan.scale || 1;
+  const currentScale = ui.pan?.scale ?? 1;
 
   const [viewport, setViewport] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: 1000,
+    height: 700,
   });
 
   useEffect(() => {
-    const handleResize = () => {
+    const updateViewport = () => {
+      const container = containerRef.current;
+
+      if (!container) {
+        setViewport({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+        return;
+      }
+
       setViewport({
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: container.clientWidth,
+        height: container.clientHeight,
       });
     };
 
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    updateViewport();
+
+    const resizeObserver = new ResizeObserver(updateViewport);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
+
+    window.addEventListener("resize", updateViewport);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateViewport);
+    };
   }, []);
 
   const toPxX = (m) => m * mapMeta.scale;
   const toPxY = (m) => m * mapMeta.scale;
 
-  const screenToWorld = () => {
+  const panX = ui.pan?.x ?? 0;
+  const panY = ui.pan?.y ?? 0;
+
+  function screenPointToWorld(point, snap = true) {
+    const rawX = (point.x - panX) / (currentScale * mapMeta.scale);
+    const rawY = (point.y - panY) / (currentScale * mapMeta.scale);
+
+    if (!snap) {
+      return { x: rawX, y: rawY };
+    }
+
+    return {
+      x: Math.round(rawX / SNAP_STEP) * SNAP_STEP,
+      y: Math.round(rawY / SNAP_STEP) * SNAP_STEP,
+    };
+  }
+
+  function pointerToWorld() {
     const stage = stageRef.current;
     if (!stage) return { x: 0, y: 0 };
 
-    const transform = stage.getAbsoluteTransform().copy().invert();
     const pointer = stage.getPointerPosition();
     if (!pointer) return { x: 0, y: 0 };
 
-    const relPos = transform.point(pointer);
+    return screenPointToWorld(pointer, true);
+  }
 
-    const worldX =
-      Math.round(relPos.x / mapMeta.scale / SNAP_STEP) * SNAP_STEP;
-    const worldY =
-      Math.round(relPos.y / mapMeta.scale / SNAP_STEP) * SNAP_STEP;
+  const visibleTopLeft = screenPointToWorld({ x: 0, y: 0 }, false);
+  const visibleBottomRight = screenPointToWorld(
+    { x: viewport.width, y: viewport.height },
+    false
+  );
 
-    return {
-      x: worldX,
-      y: worldY,
-    };
-  };
+  const paddingMeters = 3;
 
-  const stage = stageRef.current;
-  let gridStartX = 0;
-  let gridStartY = 0;
-  let gridEndX = viewport.width / mapMeta.scale;
-  let gridEndY = viewport.height / mapMeta.scale;
+  const gridStartX = Math.floor((visibleTopLeft.x - paddingMeters) / SNAP_STEP) * SNAP_STEP;
+  const gridStartY = Math.floor((visibleTopLeft.y - paddingMeters) / SNAP_STEP) * SNAP_STEP;
+  const gridEndX = Math.ceil((visibleBottomRight.x + paddingMeters) / SNAP_STEP) * SNAP_STEP;
+  const gridEndY = Math.ceil((visibleBottomRight.y + paddingMeters) / SNAP_STEP) * SNAP_STEP;
 
-  if (stage) {
-    const transform = stage.getAbsoluteTransform().copy().invert();
-    const topLeft = transform.point({ x: 0, y: 0 });
-    const bottomRight = transform.point({
-      x: viewport.width,
-      y: viewport.height,
+  const verticalLines = [];
+  for (let x = gridStartX; x <= gridEndX; x += SNAP_STEP) {
+    verticalLines.push(x);
+  }
+
+  const horizontalLines = [];
+  for (let y = gridStartY; y <= gridEndY; y += SNAP_STEP) {
+    horizontalLines.push(y);
+  }
+
+  function isMajorGridLine(value) {
+    return Math.abs(value - Math.round(value)) < 0.0001;
+  }
+
+  function handleStagePan(e) {
+    onPanChange?.({
+      ...ui.pan,
+      x: e.target.x(),
+      y: e.target.y(),
+      scale: currentScale,
     });
-
-    gridStartX = Math.floor(topLeft.x / SNAP_STEP) * SNAP_STEP;
-    gridStartY = Math.floor(topLeft.y / SNAP_STEP) * SNAP_STEP;
-    gridEndX = Math.ceil(bottomRight.x / SNAP_STEP) * SNAP_STEP;
-    gridEndY = Math.ceil(bottomRight.y / SNAP_STEP) * SNAP_STEP;
   }
 
   return (
-    <div
-      style={{
-        background: "#0f172a",
-        width: "100%",
-        height: "100vh",
-        overflow: "hidden",
-      }}
-    >
+    <div ref={containerRef} className="map-canvas-viewport">
       <Stage
         ref={stageRef}
         width={viewport.width}
         height={viewport.height}
+        x={panX}
+        y={panY}
         scaleX={currentScale}
         scaleY={currentScale}
-        onMouseMove={() => onMouseWorldChange(screenToWorld())}
+        draggable={ui.activeTool === "pan"}
+        onDragMove={handleStagePan}
+        onDragEnd={handleStagePan}
+        onMouseMove={() => onMouseWorldChange?.(pointerToWorld())}
         onMouseDown={(e) => {
           if (ui.activeTool === "pan") return;
 
@@ -108,85 +146,74 @@ export default function MapCanvas({
 
           if (!isBackground) return;
 
-          const world = screenToWorld();
+          const world = pointerToWorld();
 
           if (ui.activeTool === "wall") {
             if (!ui.pendingWallStart) {
-              onSetPendingWallStart(world);
+              onSetPendingWallStart?.(world);
             } else {
-              onAddWall({
+              onAddWall?.({
                 x1: ui.pendingWallStart.x,
                 y1: ui.pendingWallStart.y,
                 x2: world.x,
                 y2: world.y,
               });
-              onSetPendingWallStart(null);
+              onSetPendingWallStart?.(null);
             }
-          } else if (ui.activeTool === "anchor") {
-            onAddAnchor(world);
-          } else if (ui.activeTool === "select") {
-            onSelectEntity(null);
+          }
+
+          if (ui.activeTool === "anchor") {
+            onAddAnchor?.(world);
+          }
+
+          if (ui.activeTool === "select") {
+            onSelectEntity?.(null);
           }
         }}
       >
         <Layer>
-
-          {/* BACKGROUND */}
+          {/* Dynamic white background covering the visible world area */}
           <Rect
-            x={0}
-            y={0}
-            width={viewport.width / currentScale}
-            height={viewport.height / currentScale}
+            x={toPxX(gridStartX)}
+            y={toPxY(gridStartY)}
+            width={toPxX(gridEndX - gridStartX)}
+            height={toPxY(gridEndY - gridStartY)}
             fill="#ffffff"
             name="background"
           />
 
-          {/* GRID DINÁMICO (INFINITO VISUAL) */}
-          {Array.from({
-            length: Math.ceil((gridEndX - gridStartX) / SNAP_STEP),
-          }).map((_, i) => {
-            const x = gridStartX + i * SNAP_STEP;
-            const isMajor = x % 1 === 0;
+          {/* Dynamic grid */}
+          {verticalLines.map((x) => (
+            <Line
+              key={`v-${x}`}
+              points={[
+                toPxX(x),
+                toPxY(gridStartY),
+                toPxX(x),
+                toPxY(gridEndY),
+              ]}
+              stroke={isMajorGridLine(x) ? "#cbd5e1" : "#f1f5f9"}
+              strokeWidth={1 / currentScale}
+              listening={false}
+            />
+          ))}
 
-            return (
-              <Line
-                key={`v-${i}`}
-                points={[
-                  toPxX(x),
-                  toPxY(gridStartY),
-                  toPxX(x),
-                  toPxY(gridEndY),
-                ]}
-                stroke={isMajor ? "#cbd5e1" : "#f1f5f9"}
-                strokeWidth={1 / currentScale}
-                listening={false}
-              />
-            );
-          })}
+          {horizontalLines.map((y) => (
+            <Line
+              key={`h-${y}`}
+              points={[
+                toPxX(gridStartX),
+                toPxY(y),
+                toPxX(gridEndX),
+                toPxY(y),
+              ]}
+              stroke={isMajorGridLine(y) ? "#cbd5e1" : "#f1f5f9"}
+              strokeWidth={1 / currentScale}
+              listening={false}
+            />
+          ))}
 
-          {Array.from({
-            length: Math.ceil((gridEndY - gridStartY) / SNAP_STEP),
-          }).map((_, i) => {
-            const y = gridStartY + i * SNAP_STEP;
-            const isMajor = y % 1 === 0;
-
-            return (
-              <Line
-                key={`h-${i}`}
-                points={[
-                  toPxX(gridStartX),
-                  toPxY(y),
-                  toPxX(gridEndX),
-                  toPxY(y),
-                ]}
-                stroke={isMajor ? "#cbd5e1" : "#f1f5f9"}
-                strokeWidth={1 / currentScale}
-                listening={false}
-              />
-            );
-          })}
-
-          {/* WALLS */}
+          {/* Walls */}
           {walls.allIds.map((id) => {
             const wall = walls.byId[id];
             const isSelected = ui.selectedEntity?.id === id;
@@ -205,13 +232,13 @@ export default function MapCanvas({
                 lineCap="round"
                 onClick={(e) => {
                   e.cancelBubble = true;
-                  onSelectEntity({ type: "wall", id });
+                  onSelectEntity?.({ type: "wall", id });
                 }}
               />
             );
           })}
 
-          {/* ANCHORS */}
+          {/* Anchors / ESP nodes */}
           {anchors.allIds.map((id) => {
             const anchor = anchors.byId[id];
             const isSelected = ui.selectedEntity?.id === id;
@@ -232,11 +259,12 @@ export default function MapCanvas({
                     Math.round(node.y() / mapMeta.scale / SNAP_STEP) *
                     SNAP_STEP;
 
-                  onUpdateAnchor(id, { x: newX, y: newY });
+                  const updater = onMoveAnchor || onUpdateAnchor;
+                  updater?.(id, { x: newX, y: newY });
                 }}
                 onClick={(e) => {
                   e.cancelBubble = true;
-                  onSelectEntity({ type: "anchor", id });
+                  onSelectEntity?.({ type: "anchor", id });
                 }}
               >
                 <Rect
@@ -246,7 +274,7 @@ export default function MapCanvas({
                   offsetY={9 / currentScale}
                   fill={isSelected ? "#ef4444" : "#3b82f6"}
                   rotation={45}
-                  stroke="#fff"
+                  stroke="#ffffff"
                   strokeWidth={2 / currentScale}
                 />
 
@@ -264,50 +292,45 @@ export default function MapCanvas({
             );
           })}
 
-
-        
-          {/* TAGS */}
+          {/* Tags */}
           {tags.map((tag) => {
             const x = tag.x ?? 0;
             const y = tag.y ?? 0;
-
-            const isSelected = ui.selectedEntity?.id === tag.id;
-            const isOut = false; 
+            const tagId = tag.id ?? tag.tag_mac;
+            const isSelected = ui.selectedEntity?.id === tagId;
 
             return (
               <Group
-                key={tag.id}
+                key={tagId}
                 x={toPxX(x)}
                 y={toPxY(y)}
                 onClick={(e) => {
                   e.cancelBubble = true;
-                  onSelectEntity({ type: "tag", id: tag.id });
+                  onSelectEntity?.({ type: "tag", id: tagId });
                 }}
               >
-                {/* TAG POINT */}
                 <Circle
                   radius={12 / currentScale}
                   fill="#f7c551"
-                  stroke="#fff"
+                  stroke="#ffffff"
                   strokeWidth={2 / currentScale}
                 />
 
-                {/* COORDENATES */}
                 <Text
                   text={`${x.toFixed(2)}m, ${y.toFixed(2)}m`}
                   fontSize={(isSelected ? 13 : 10) / currentScale}
-                  fill={isSelected ? "#fff" : (isOut ? "#fbbf24" : "#64748b")}
+                  fill={isSelected ? "#111827" : "#64748b"}
                   align="center"
-                  width={110 / currentScale}
-                  offsetX={55 / currentScale}
-                  y={isSelected ? 6 / currentScale : 0}
+                  width={120 / currentScale}
+                  offsetX={60 / currentScale}
+                  y={16 / currentScale}
                   fontStyle={isSelected ? "bold" : "normal"}
                 />
               </Group>
             );
           })}
 
-          {/* WALL PREVIEW */}
+          {/* Wall preview */}
           {ui.pendingWallStart && ui.activeTool === "wall" && (
             <Line
               points={[
