@@ -18,6 +18,7 @@ export default function MapCanvas({
 }) {
   const { walls, anchors, ui, mapMeta } = state;
   const stageRef = useRef(null);
+  const containerRef = useRef(null);
 
   const SNAP_STEP = 0.5;
   const currentScale = ui.pan.scale || 1;
@@ -28,15 +29,16 @@ export default function MapCanvas({
   });
 
   useEffect(() => {
-    const handleResize = () => {
-      setViewport({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
+    const el = containerRef.current;
+    if (!el) return;
 
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setViewport({ width, height });
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   const toPxX = (m) => m * mapMeta.scale;
@@ -85,10 +87,11 @@ export default function MapCanvas({
 
   return (
     <div
+      ref={containerRef}
       style={{
         background: "#0f172a",
         width: "100%",
-        height: "100vh",
+        height: "100%",
         overflow: "hidden",
       }}
     >
@@ -264,15 +267,13 @@ export default function MapCanvas({
             );
           })}
 
-
-        
           {/* TAGS */}
           {tags.map((tag) => {
             const x = tag.x ?? 0;
             const y = tag.y ?? 0;
 
             const isSelected = ui.selectedEntity?.id === tag.id;
-            const isOut = false; 
+            const isOut = false;
 
             return (
               <Group

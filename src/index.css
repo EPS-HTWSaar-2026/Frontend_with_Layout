@@ -329,6 +329,7 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
 :root {
   font-family: Inter, Arial, sans-serif;
   color: #111827;
@@ -430,6 +431,29 @@ button {
   border-color: #2563eb;
 }
 
+/* ── Main layout: sidebar + canvas + properties ── */
+.main-layout {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  /* KEY: give it a fixed height so children can use height: 100% */
+  height: 600px;
+}
+
+/* ── Canvas container: fills available space ── */
+.canvas-container {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
+  border: 1px solid #e5e7eb;
+}
+
 .editor-layout {
   display: grid;
   grid-template-columns: 1fr 340px;
@@ -463,6 +487,14 @@ button {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 260px;
+  max-width: 320px;
+  background: white;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
+  border: 1px solid #e5e7eb;
+  overflow-y: auto;
 }
 
 .properties-section {
@@ -517,6 +549,15 @@ button {
   .editor-layout {
     grid-template-columns: 1fr;
   }
+
+  .main-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .canvas-container {
+    height: 500px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -531,6 +572,7 @@ button {
     width: 100%;
   }
 }
+
 .dashboard-searchbar {
   margin-bottom: 18px;
 }
